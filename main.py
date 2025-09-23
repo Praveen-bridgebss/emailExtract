@@ -1,9 +1,11 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request, HTTPException, Query
+from fastapi.responses import HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from email_service import EmailService
 from pydantic import BaseModel
 import uvicorn
+import base64
+import io
 
 app = FastAPI(title="Gmail Email Parser")
 
@@ -100,6 +102,74 @@ async def get_emails_api():
 @app.post("/button-click")
 async def button_click():
     return {"message": "Button was clicked!", "status": "success"}
+
+@app.get("/download-attachment")
+async def download_attachment(
+    email_address: str = Query(...),
+    password: str = Query(...),
+    message_id: str = Query(...),
+    filename: str = Query(...)
+):
+    """Download a specific attachment from an email"""
+    try:
+        # Create email service and connect
+        email_service = EmailService(email_address, password)
+        
+        if not email_service.connect():
+            raise HTTPException(status_code=400, detail="Failed to connect to email account")
+        
+        try:
+            # Search for the specific email by Message-ID
+            status, messages = email_service.mail.search(None, f'HEADER Message-ID "{message_id}"')
+            
+            if status != "OK" or not messages[0]:
+                raise HTTPException(status_code=404, detail="Email not found")
+            
+            email_ids = messages[0].split()
+            if not email_ids:
+                raise HTTPException(status_code=404, detail="Email not found")
+            
+            # Fetch the email
+            status, msg_data = email_service.mail.fetch(email_ids[0], "(RFC822)")
+            
+            if status != "OK":
+                raise HTTPException(status_code=500, detail="Failed to fetch email")
+            
+            # Parse the email
+            import email as email_lib
+            email_message = email_lib.message_from_bytes(msg_data[0][1])
+            
+            # Get attachments
+            attachments = email_service.get_attachments(email_message)
+            
+            # Find the requested attachment
+            target_attachment = None
+            for attachment in attachments:
+                if attachment["filename"] == filename:
+                    target_attachment = attachment
+                    break
+            
+            if not target_attachment:
+                raise HTTPException(status_code=404, detail="Attachment not found")
+            
+            # Return the attachment as a download
+            headers = {
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Content-Type": target_attachment["content_type"]
+            }
+            
+            return Response(
+                content=target_attachment["data"],
+                headers=headers,
+                media_type=target_attachment["content_type"]
+            )
+            
+        finally:
+            email_service.disconnect()
+            
+    except Exception as e:
+        print(f"Error downloading attachment: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to download attachment: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

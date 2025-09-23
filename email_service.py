@@ -223,6 +223,9 @@ class EmailService:
         # Get email ID
         message_id = email_message.get("Message-ID", "")
         
+        # Get attachments
+        attachments = self.get_attachments(email_message)
+        
         return {
             "subject": subject,
             "sender": sender,
@@ -230,7 +233,8 @@ class EmailService:
             "date": formatted_date,
             "body": body[:200] + "..." if len(body) > 200 else body,
             "message_id": message_id,
-            "has_attachments": self.has_attachments(email_message)
+            "has_attachments": self.has_attachments(email_message),
+            "attachments": attachments
         }
     
     def get_email_body(self, email_message) -> str:
@@ -268,6 +272,34 @@ class EmailService:
                 if "attachment" in content_disposition:
                     return True
         return False
+    
+    def get_attachments(self, email_message) -> List[Dict]:
+        """Extract attachment information from email"""
+        attachments = []
+        if email_message.is_multipart():
+            for part in email_message.walk():
+                content_disposition = str(part.get("Content-Disposition"))
+                if "attachment" in content_disposition:
+                    # Get filename
+                    filename = part.get_filename()
+                    if filename:
+                        # Decode filename if it's encoded
+                        filename = self.decode_mime_words(filename)
+                        
+                        # Get content type
+                        content_type = part.get_content_type()
+                        
+                        # Get attachment data
+                        attachment_data = part.get_payload(decode=True)
+                        
+                        if attachment_data:
+                            attachments.append({
+                                "filename": filename,
+                                "content_type": content_type,
+                                "size": len(attachment_data),
+                                "data": attachment_data
+                            })
+        return attachments
     
     def categorize_email_by_subject(self, subject: str) -> str:
         """Categorize email based on job title keywords in the subject"""

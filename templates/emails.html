@@ -174,6 +174,34 @@
         .category-section:nth-child(even) .category-title {
             background: linear-gradient(45deg, #e3f2fd, #bbdefb);
         }
+        .attachment-list {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .attachment-item {
+            display: flex;
+            align-items: center;
+        }
+        .attachment-link {
+            color: #007bff;
+            text-decoration: none;
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            transition: all 0.2s;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .attachment-link:hover {
+            background: #e9ecef;
+            border-color: #007bff;
+            transform: translateY(-1px);
+        }
     </style>
 </head>
 <body>
@@ -225,8 +253,20 @@
                                     <td class="date">{{ email.date }}</td>
                                     <td class="body" title="{{ email.body }}">{{ email.body or 'No content' }}</td>
                                     <td class="attachment">
-                                        {% if email.has_attachments %}
-                                            📎 Has attachments
+                                        {% if email.has_attachments and email.attachments %}
+                                            <div class="attachment-list">
+                                                {% for attachment in email.attachments %}
+                                                    <div class="attachment-item">
+                                                        <a href="/download-attachment?email_address={{ request.query_params.get('email', '') }}&password={{ request.query_params.get('password', '') }}&message_id={{ email.message_id }}&filename={{ attachment.filename|urlencode }}" 
+                                                           class="attachment-link" 
+                                                           title="Download {{ attachment.filename }} ({{ (attachment.size / 1024)|round|int }} KB)">
+                                                            📎 {{ attachment.filename }}
+                                                        </a>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% elif email.has_attachments %}
+                                            📎 Has attachments (details unavailable)
                                         {% else %}
                                             -
                                         {% endif %}
