@@ -61,7 +61,7 @@ async def test_connection(credentials: EmailCredentials):
 
 @app.get("/emails", response_class=HTMLResponse)
 async def get_emails(request: Request):
-    """Display all emails in a table"""
+    """Display all emails categorized by job titles"""
     try:
         # Get credentials from query parameters or use defaults
         email = request.query_params.get("email", EMAIL_ADDRESS)
@@ -71,9 +71,13 @@ async def get_emails(request: Request):
         email_service = EmailService(email, password)
         emails = email_service.get_all_emails(limit=100)
         print(f"Retrieved {len(emails)} emails")
+        
+        # Categorize emails by job titles
+        categorized_emails = email_service.categorize_emails(emails)
+        
         return templates.TemplateResponse("emails.html", {
             "request": request, 
-            "emails": emails,
+            "categorized_emails": categorized_emails,
             "total_emails": len(emails),
             "error": None
         })
@@ -81,7 +85,7 @@ async def get_emails(request: Request):
         print(f"Error retrieving emails: {e}")
         return templates.TemplateResponse("emails.html", {
             "request": request, 
-            "emails": [],
+            "categorized_emails": {},
             "total_emails": 0,
             "error": str(e)
         })

@@ -4,6 +4,7 @@ from email.header import decode_header
 from datetime import datetime
 from typing import List, Dict
 import ssl
+import re
 
 class EmailService:
     def __init__(self, email_address: str, password: str):
@@ -14,6 +15,19 @@ class EmailService:
         self.imap_server = "imap.gmail.com"
         self.imap_port = 993
         self.provider = "Gmail"
+        
+        # Job title categories for email categorization
+        self.job_categories = {
+            "Prompt Engineer": [
+                "prompt engineer"
+            ],
+            "Software Engineer": [
+                "software engineer"
+            ],
+            "Process Engineer": [
+                "process engineer"
+            ]
+        }
         
     def connect(self):
         """Connect to Gmail IMAP server"""
@@ -254,3 +268,36 @@ class EmailService:
                 if "attachment" in content_disposition:
                     return True
         return False
+    
+    def categorize_email_by_subject(self, subject: str) -> str:
+        """Categorize email based on job title keywords in the subject"""
+        if not subject:
+            return "Uncategorized"
+        
+        subject_lower = subject.lower()
+        
+        # Check each job category for matching keywords
+        for category, keywords in self.job_categories.items():
+            for keyword in keywords:
+                # Use word boundary regex to match whole words only
+                pattern = r'\b' + re.escape(keyword.lower()) + r'\b'
+                if re.search(pattern, subject_lower):
+                    return category
+        
+        return "Uncategorized"
+    
+    def categorize_emails(self, emails: List[Dict]) -> Dict[str, List[Dict]]:
+        """Categorize a list of emails by job titles"""
+        categorized = {}
+        
+        # Initialize categories
+        for category in self.job_categories.keys():
+            categorized[category] = []
+        categorized["Uncategorized"] = []
+        
+        # Categorize each email
+        for email_data in emails:
+            category = self.categorize_email_by_subject(email_data.get("subject", ""))
+            categorized[category].append(email_data)
+        
+        return categorized
