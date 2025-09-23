@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Configuration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .form-container {
+            padding: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus, input[type="password"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .back-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .instructions {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .instructions h4 {
+            margin-top: 0;
+            color: #333;
+        }
+        .instructions ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back-btn">← Back to Home</a>
+            <h1>🔧 Gmail Configuration</h1>
+            <p>Configure your Gmail account settings</p>
+        </div>
+        
+        <div class="form-container">
+            <div class="instructions">
+                <h4>📋 Gmail Setup Instructions:</h4>
+                <div style="background: #fff3cd; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #ffc107;">
+                    <h6>⚠️ Important: Gmail Requirements</h6>
+                    <p><strong>Most Gmail accounts require an App Password for IMAP access.</strong> Your regular password will likely fail.</p>
+                </div>
+                
+                <h6>Step 1: Enable IMAP in Gmail</h6>
+                <ol>
+                    <li>Go to <a href="https://mail.google.com/mail/u/0/#settings/fwdandpop" target="_blank">Gmail Settings</a></li>
+                    <li>Click "Forwarding and POP/IMAP" tab</li>
+                    <li>Enable "IMAP access"</li>
+                    <li>Click "Save Changes"</li>
+                </ol>
+                
+                <h6>Step 2: Generate App Password</h6>
+                <ol>
+                    <li>Go to <a href="https://myaccount.google.com/security" target="_blank">Google Security Settings</a></li>
+                    <li>Enable 2-Step Verification (if not already enabled)</li>
+                    <li>Go to "App passwords" section</li>
+                    <li>Select "Mail" and "Other (custom name)"</li>
+                    <li>Enter "Email Parser App" as the name</li>
+                    <li>Copy the 16-character password (no spaces)</li>
+                </ol>
+                
+                <div style="background: #d1ecf1; padding: 15px; border-radius: 5px; margin: 10px 0;">
+                    <h6>💡 Pro Tip:</h6>
+                    <p>If you don't have 2FA enabled, you might be able to use your regular password. But most modern Gmail accounts require app passwords for security.</p>
+                </div>
+            </div>
+            
+            <form id="emailConfigForm">
+                <div class="form-group">
+                    <label for="email">Email Address:</label>
+                    <input type="text" id="email" name="email" placeholder="your-email@gmail.com" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">App Password:</label>
+                    <input type="password" id="password" name="password" placeholder="Enter your 16-character app password" required>
+                    <small style="color: #666; font-size: 12px;">
+                        ⚠️ Use the 16-character app password from Google Security settings (not your regular password)
+                    </small>
+                </div>
+                
+                <button type="submit" class="btn">Test Connection & View Emails</button>
+            </form>
+            
+            <div id="result" style="margin-top: 20px; padding: 15px; border-radius: 5px; display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // Gmail-only configuration - no need for domain detection
+
+        document.getElementById('emailConfigForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('result');
+            
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<div style="text-align: center; color: #666;">🔄 Testing connection...</div>';
+            
+            try {
+                const response = await fetch('/test-connection', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email: email, password: password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 5px;">
+                            ✅ <strong>Connection Successful!</strong><br>
+                            Found ${data.email_count} emails.<br>
+                            <a href="/emails?email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}" style="color: #155724; text-decoration: underline;">View All Emails</a>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px;">
+                            ❌ <strong>Connection Failed:</strong><br>
+                            ${data.error}<br>
+                            <small>Please check your credentials and try again.</small>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px;">
+                        ❌ <strong>Error:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>
