@@ -293,13 +293,47 @@ class EmailService:
                         attachment_data = part.get_payload(decode=True)
                         
                         if attachment_data:
+                            # Format file size for display
+                            size_bytes = len(attachment_data)
+                            if size_bytes < 1024:
+                                size_display = f"{size_bytes} B"
+                            elif size_bytes < 1024 * 1024:
+                                size_display = f"{size_bytes / 1024:.1f} KB"
+                            else:
+                                size_display = f"{size_bytes / (1024 * 1024):.1f} MB"
+                            
+                            # Get file extension for icon
+                            file_extension = filename.split('.')[-1].lower() if '.' in filename else 'file'
+                            icon = self.get_file_icon(file_extension)
+                            
                             attachments.append({
                                 "filename": filename,
                                 "content_type": content_type,
-                                "size": len(attachment_data),
-                                "data": attachment_data
+                                "size": size_bytes,
+                                "size_display": size_display,
+                                "data": attachment_data,
+                                "icon": icon,
+                                "extension": file_extension
                             })
         return attachments
+    
+    def get_file_icon(self, extension: str) -> str:
+        """Get appropriate icon for file extension"""
+        icon_map = {
+            'pdf': '📄',
+            'doc': '📝', 'docx': '📝',
+            'xls': '📊', 'xlsx': '📊',
+            'ppt': '📽️', 'pptx': '📽️',
+            'txt': '📄',
+            'jpg': '🖼️', 'jpeg': '🖼️', 'png': '🖼️', 'gif': '🖼️',
+            'zip': '🗜️', 'rar': '🗜️', '7z': '🗜️',
+            'mp4': '🎥', 'avi': '🎥', 'mov': '🎥',
+            'mp3': '🎵', 'wav': '🎵',
+            'exe': '⚙️', 'msi': '⚙️',
+            'html': '🌐', 'htm': '🌐',
+            'css': '🎨', 'js': '📜'
+        }
+        return icon_map.get(extension, '📎')
     
     def categorize_email_by_subject(self, subject: str) -> str:
         """Categorize email based on job title keywords in the subject"""

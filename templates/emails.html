@@ -201,6 +201,42 @@
             background: #e9ecef;
             border-color: #007bff;
             transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+        }
+        .attachment-size {
+            color: #6c757d;
+            font-size: 10px;
+            font-weight: 500;
+        }
+        .attachment-placeholder {
+            color: #6c757d;
+            font-style: italic;
+            font-size: 12px;
+        }
+        .no-attachments {
+            color: #adb5bd;
+            font-size: 12px;
+        }
+        .tos3-btn {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            font-size: 10px;
+            border-radius: 12px;
+            cursor: pointer;
+            margin-left: 8px;
+            transition: all 0.2s;
+            font-weight: 600;
+            box-shadow: 0 1px 3px rgba(40, 167, 69, 0.3);
+        }
+        .tos3-btn:hover {
+            background: linear-gradient(45deg, #218838, #1ea085);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(40, 167, 69, 0.4);
+        }
+        .tos3-btn:active {
+            transform: translateY(0);
         }
     </style>
 </head>
@@ -259,16 +295,24 @@
                                                     <div class="attachment-item">
                                                         <a href="/download-attachment?email_address={{ request.query_params.get('email', '') }}&password={{ request.query_params.get('password', '') }}&message_id={{ email.message_id }}&filename={{ attachment.filename|urlencode }}" 
                                                            class="attachment-link" 
-                                                           title="Download {{ attachment.filename }} ({{ (attachment.size / 1024)|round|int }} KB)">
-                                                            📎 {{ attachment.filename }}
+                                                           title="Download {{ attachment.filename }} ({{ attachment.size_display }})"
+                                                           download="{{ attachment.filename }}">
+                                                            {{ attachment.icon }} {{ attachment.filename }}
+                                                            <span class="attachment-size">({{ attachment.size_display }})</span>
                                                         </a>
+                                                        <button class="tos3-btn" 
+                                                                title="Upload {{ attachment.filename }} to S3"
+                                                                onclick="uploadToS3('{{ email.message_id }}', '{{ attachment.filename }}')"
+                                                                data-filename="{{ attachment.filename }}">
+                                                            toS3
+                                                        </button>
                                                     </div>
                                                 {% endfor %}
                                             </div>
                                         {% elif email.has_attachments %}
-                                            📎 Has attachments (details unavailable)
+                                            <span class="attachment-placeholder">📎 Has attachments (details unavailable)</span>
                                         {% else %}
-                                            -
+                                            <span class="no-attachments">-</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -307,6 +351,74 @@
         setTimeout(() => {
             location.reload();
         }, 300000);
+
+        // Function for uploading to S3
+        async function uploadToS3(messageId, filename) {
+            try {
+                console.log('Uploading to S3:', { messageId, filename });
+                
+                // Get current URL parameters for email and password
+                const urlParams = new URLSearchParams(window.location.search);
+                const email = urlParams.get('email');
+                const password = urlParams.get('password');
+                
+                if (!email || !password) {
+                    alert('Email credentials not found. Please refresh the page and try again.');
+                    return;
+                }
+                
+                // Show loading state
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = 'Uploading...';
+                button.disabled = true;
+                
+                // Get filename from button data attribute if available
+                const actualFilename = button.getAttribute('data-filename') || filename;
+                console.log('Actual filename:', actualFilename);
+                
+                // Call S3 upload endpoint
+                const params = new URLSearchParams({
+                    email_address: email,
+                    password: password,
+                    message_id: messageId,
+                    filename: actualFilename
+                });
+                
+                console.log('S3 upload params:', params.toString());
+                
+                const response = await fetch(`/upload-to-s3?${params}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                console.log('S3 upload response status:', response.status);
+                
+                const result = await response.json();
+                console.log('S3 upload result:', result);
+                
+                if (result.success) {
+                    alert(`✅ Successfully uploaded ${actualFilename} to S3!\n\nS3 URL: ${result.s3_url}`);
+                } else {
+                    let errorMessage = `❌ Upload failed: ${result.message}`;
+                    if (result.debug_info) {
+                        errorMessage += `\n\nDebug Info:\nRequested: ${result.debug_info.requested_filename}\nAvailable: ${result.debug_info.available_attachments.join(', ')}`;
+                    }
+                    alert(errorMessage);
+                }
+                
+            } catch (error) {
+                console.error('Upload error:', error);
+                alert(`❌ Upload failed: ${error.message}`);
+            } finally {
+                // Restore button state
+                const button = event.target;
+                button.textContent = 'toS3';
+                button.disabled = false;
+            }
+        }
     </script>
 </body>
 </html>
