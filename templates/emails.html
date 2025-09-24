@@ -336,7 +336,7 @@
             <h1>📧 Gmail Email Parser - Unread Emails</h1>
             <div class="stats">
                 Unread Emails: {{ total_emails }}
-                <button class="refresh-btn" onclick="refreshAndUpload()">🔄 Refresh & Auto-Upload</button>
+                <button class="refresh-btn" onclick="refreshAndUpload()">🔄 Auto-refresh in 30s</button>
             </div>
         </div>
         
@@ -436,50 +436,92 @@
     </div>
 
     <script>
-        // Auto-refresh every 5 minutes
-        setTimeout(() => {
-            location.reload();
-        }, 300000);
+        // Global variables for countdown control
+        let refreshCountdown = 30;
+        let refreshInterval = null;
+        let isUploading = false;
 
-        // Check if we should start auto-upload on page load
+        // Function to start the countdown
+        function startCountdown() {
+            console.log('Starting 30-second countdown...');
+            isUploading = false;
+            refreshCountdown = 30;
+            
+            refreshInterval = setInterval(() => {
+                refreshCountdown--;
+                
+                // Update button text to show countdown
+                const refreshBtn = document.querySelector('.refresh-btn');
+                if (refreshBtn) {
+                    refreshBtn.textContent = `🔄 Auto-refresh in ${refreshCountdown}s`;
+                }
+                
+                // Show notification every 10 seconds
+                if (refreshCountdown % 10 === 0) {
+                    showNotification(`⏰ Auto-refresh in ${refreshCountdown} seconds...`, 'info');
+                }
+                
+                if (refreshCountdown <= 0) {
+                    clearInterval(refreshInterval);
+                    showNotification('🔄 Refreshing page...', 'info');
+                    location.reload();
+                }
+            }, 1000);
+        }
+
+        // Auto-upload attachments after page loads
         window.addEventListener('load', function() {
-            // Check if we came from refreshAndUpload
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('auto_upload') === 'true') {
-                setTimeout(() => {
-                    autoUploadAllAttachments();
-                }, 1000);
-            }
+            // Wait 2 seconds for page to fully load, then start auto-upload
+            setTimeout(() => {
+                console.log('Page loaded, checking for attachments to upload...');
+                autoUploadAllAttachments();
+            }, 2000);
         });
 
-        // Function to refresh page and auto-upload all attachments
+
+        // Function to manually trigger refresh and upload
         async function refreshAndUpload() {
-            // Show initial notification
-            showNotification('🔄 Refreshing emails and starting auto-upload...', 'info');
+            console.log('Manual refresh triggered');
             
-            // Get current URL parameters
-            const urlParams = new URLSearchParams(window.location.search);
-            urlParams.set('auto_upload', 'true');
+            // Clear the automatic refresh interval
+            clearInterval(refreshInterval);
             
-            // Refresh the page with auto-upload parameter
-            window.location.href = window.location.pathname + '?' + urlParams.toString();
+            // Show notification
+            showNotification('🔄 Manual refresh triggered - starting auto-upload...', 'info');
+            
+            // Start auto-upload process immediately
+            autoUploadAllAttachments();
         }
+
 
         // Function to automatically upload all attachments
         async function autoUploadAllAttachments() {
+            console.log('autoUploadAllAttachments function called');
+            isUploading = true;
+            
             const uploadButtons = document.querySelectorAll('.tos3-btn:not(.uploaded)');
+            console.log(`Found ${uploadButtons.length} attachments to upload`);
             
             if (uploadButtons.length === 0) {
                 showNotification('ℹ️ No new attachments to upload', 'info');
                 console.log('No attachments to upload');
+                // Start countdown immediately if no uploads needed
+                startCountdown();
                 return;
             }
 
             // Show starting notification
-            showNotification(`📤 Starting upload of ${uploadButtons.length} attachments...`, 'info');
+            showNotification(`📤 Auto-uploading ${uploadButtons.length} attachments...`, 'info');
+            console.log(`Starting upload of ${uploadButtons.length} attachments`);
 
             // Show progress modal
             showUploadProgress(0, uploadButtons.length);
+
+            // Update button to show uploading
+            const refreshBtn = document.querySelector('.refresh-btn');
+            if (refreshBtn) {
+                refreshBtn.textContent = '⏳ Auto-uploading...';
+            }
 
             let completed = 0;
             let successful = 0;
@@ -506,8 +548,9 @@
                     const messageId = button.getAttribute('onclick').match(/'([^']+)'/)[1];
                     const filename = button.getAttribute('data-filename');
 
+                    console.log(`Auto-uploading: ${filename}`);
                     // Show individual upload notification
-                    showNotification(`📤 Uploading: ${filename}`, 'info');
+                    showNotification(`📤 Auto-uploading: ${filename}`, 'info');
 
                     // Upload to S3
                     await uploadToS3Silent(messageId, filename);
@@ -522,11 +565,12 @@
                     completed++;
                     updateProgress(completed, total);
 
+                    console.log(`Successfully auto-uploaded: ${filename}`);
                     // Show success notification for individual file
-                    showNotification(`✅ Uploaded: ${filename}`, 'success');
+                    showNotification(`✅ Auto-uploaded: ${filename}`, 'success');
 
                 } catch (error) {
-                    console.error('Upload failed for:', button, error);
+                    console.error('Auto-upload failed for:', button, error);
                     button.classList.remove('uploading');
                     button.textContent = 'Failed';
                     button.style.background = 'linear-gradient(45deg, #dc3545, #c82333)';
@@ -536,25 +580,33 @@
                     updateProgress(completed, total);
 
                     // Show error notification for individual file
-                    showNotification(`❌ Failed: ${filename}`, 'error');
+                    showNotification(`❌ Auto-upload failed: ${filename}`, 'error');
                 }
 
                 // Small delay between uploads
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
 
+            console.log(`Auto-upload complete: ${successful} successful, ${failed} failed`);
             // Show final completion notification
             if (failed === 0) {
-                showNotification(`🎉 All ${successful} attachments uploaded successfully!`, 'success');
+                showNotification(`🎉 Auto-uploaded all ${successful} attachments successfully!`, 'success');
             } else {
-                showNotification(`⚠️ Upload complete: ${successful} successful, ${failed} failed`, 'warning');
+                showNotification(`⚠️ Auto-upload complete: ${successful} successful, ${failed} failed`, 'warning');
             }
 
             // Hide progress modal after a delay
             setTimeout(() => {
                 hideUploadProgress();
             }, 2000);
+
+            // Start countdown only after all uploads are complete
+            console.log('All uploads complete, starting 30-second countdown...');
+            setTimeout(() => {
+                startCountdown();
+            }, 3000); // Wait 3 seconds after uploads complete
         }
+
 
         // Function to show upload progress modal
         function showUploadProgress(completed, total) {
