@@ -76,7 +76,7 @@ async def test_connection(credentials: EmailCredentials):
 
 @app.get("/emails", response_class=HTMLResponse)
 async def get_emails(request: Request):
-    """Display all emails categorized by job titles"""
+    """Display unread emails categorized by job titles"""
     try:
         # Get credentials from query parameters or use defaults
         email = request.query_params.get("email", EMAIL_ADDRESS)
@@ -84,8 +84,10 @@ async def get_emails(request: Request):
         
         print(f"Attempting to connect to email: {email}")
         email_service = EmailService(email, password)
-        emails = email_service.get_all_emails(limit=100)
-        print(f"Retrieved {len(emails)} emails")
+        
+        # Fetch only unread emails
+        emails = email_service.get_unread_emails(limit=100)
+        print(f"Retrieved {len(emails)} unread emails")
         
         # Categorize emails by job titles
         categorized_emails = email_service.categorize_emails(emails)

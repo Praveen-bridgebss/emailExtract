@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Parser - All Emails</title>
+    <title>Email Parser - Unread Emails</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -244,9 +244,9 @@
     <div class="container">
         <div class="header">
             <a href="/" class="back-btn">← Back to Home</a>
-            <h1>📧 Gmail Email Parser</h1>
+            <h1>📧 Gmail Email Parser - Unread Emails</h1>
             <div class="stats">
-                Total Emails: {{ total_emails }}
+                Unread Emails: {{ total_emails }}
                 <button class="refresh-btn" onclick="location.reload()">🔄 Refresh</button>
             </div>
         </div>
@@ -351,6 +351,7 @@
         setTimeout(() => {
             location.reload();
         }, 300000);
+
 
         // Function for uploading to S3
         async function uploadToS3(messageId, filename) {

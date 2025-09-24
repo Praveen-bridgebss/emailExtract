@@ -174,6 +174,61 @@ class EmailService:
         finally:
             self.disconnect()
     
+    def get_unread_emails(self, limit: int = 50) -> List[Dict]:
+        """Get only unread emails from the inbox"""
+        if not self.connect():
+            raise Exception("Failed to connect to Gmail. Please check your credentials.")
+        
+        try:
+            # Search for unread emails using IMAP UNSEEN flag
+            status, messages = self.mail.search(None, "UNSEEN")
+            
+            if status != "OK":
+                raise Exception("Failed to search for unread emails. Please check your Gmail settings.")
+            
+            email_ids = messages[0].split()
+            
+            # If no unread emails found, return empty list
+            if not email_ids:
+                print("No unread emails found in inbox")
+                return []
+            
+            email_ids = email_ids[-limit:] if len(email_ids) > limit else email_ids
+            emails = []
+            
+            for email_id in reversed(email_ids):
+                try:
+                    # Fetch the email
+                    status, msg_data = self.mail.fetch(email_id, "(RFC822)")
+                    
+                    if status != "OK":
+                        continue
+                    
+                    # Parse the email
+                    email_message = email.message_from_bytes(msg_data[0][1])
+                    
+                    # Extract email details
+                    email_data = self.parse_email(email_message)
+                    emails.append(email_data)
+                    
+                except Exception as e:
+                    print(f"Error processing email {email_id}: {e}")
+                    continue
+            
+            # Verify we actually got some emails
+            if not emails:
+                print("No unread emails could be retrieved")
+                return []
+            
+            print(f"Successfully retrieved {len(emails)} unread emails")
+            return emails
+            
+        except Exception as e:
+            print(f"Error fetching unread emails: {e}")
+            raise e
+        finally:
+            self.disconnect()
+    
     def test_connection(self) -> bool:
         """Test if we can actually connect and access emails"""
         try:
