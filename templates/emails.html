@@ -238,6 +238,95 @@
         .tos3-btn:active {
             transform: translateY(0);
         }
+        .tos3-btn.uploading {
+            background: linear-gradient(45deg, #ffc107, #ff8c00);
+            cursor: not-allowed;
+        }
+        .tos3-btn.uploaded {
+            background: linear-gradient(45deg, #6c757d, #495057);
+            cursor: default;
+        }
+        .tos3-btn.uploaded:hover {
+            background: linear-gradient(45deg, #6c757d, #495057);
+            transform: none;
+            box-shadow: 0 1px 3px rgba(40, 167, 69, 0.3);
+        }
+        .upload-progress {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            text-align: center;
+            min-width: 300px;
+        }
+        .upload-progress h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #28a745, #20c997);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .progress-text {
+            font-size: 14px;
+            color: #666;
+            margin-top: 10px;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+            z-index: 1001;
+            font-weight: 600;
+            animation: slideIn 0.3s ease-out;
+            max-width: 300px;
+        }
+        .notification.error {
+            background: linear-gradient(45deg, #dc3545, #c82333);
+            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+        }
+        .notification.warning {
+            background: linear-gradient(45deg, #ffc107, #ff8c00);
+            color: #333;
+            box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        .notification-close {
+            float: right;
+            margin-left: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 18px;
+        }
     </style>
 </head>
 <body>
@@ -247,7 +336,7 @@
             <h1>📧 Gmail Email Parser - Unread Emails</h1>
             <div class="stats">
                 Unread Emails: {{ total_emails }}
-                <button class="refresh-btn" onclick="location.reload()">🔄 Refresh</button>
+                <button class="refresh-btn" onclick="refreshAndUpload()">🔄 Refresh & Auto-Upload</button>
             </div>
         </div>
         
@@ -352,6 +441,213 @@
             location.reload();
         }, 300000);
 
+        // Check if we should start auto-upload on page load
+        window.addEventListener('load', function() {
+            // Check if we came from refreshAndUpload
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('auto_upload') === 'true') {
+                setTimeout(() => {
+                    autoUploadAllAttachments();
+                }, 1000);
+            }
+        });
+
+        // Function to refresh page and auto-upload all attachments
+        async function refreshAndUpload() {
+            // Show initial notification
+            showNotification('🔄 Refreshing emails and starting auto-upload...', 'info');
+            
+            // Get current URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set('auto_upload', 'true');
+            
+            // Refresh the page with auto-upload parameter
+            window.location.href = window.location.pathname + '?' + urlParams.toString();
+        }
+
+        // Function to automatically upload all attachments
+        async function autoUploadAllAttachments() {
+            const uploadButtons = document.querySelectorAll('.tos3-btn:not(.uploaded)');
+            
+            if (uploadButtons.length === 0) {
+                showNotification('ℹ️ No new attachments to upload', 'info');
+                console.log('No attachments to upload');
+                return;
+            }
+
+            // Show starting notification
+            showNotification(`📤 Starting upload of ${uploadButtons.length} attachments...`, 'info');
+
+            // Show progress modal
+            showUploadProgress(0, uploadButtons.length);
+
+            let completed = 0;
+            let successful = 0;
+            let failed = 0;
+            const total = uploadButtons.length;
+
+            for (let i = 0; i < uploadButtons.length; i++) {
+                const button = uploadButtons[i];
+                
+                // Skip if already uploaded
+                if (button.classList.contains('uploaded')) {
+                    completed++;
+                    updateProgress(completed, total);
+                    continue;
+                }
+
+                try {
+                    // Set uploading state
+                    button.classList.add('uploading');
+                    button.textContent = 'Uploading...';
+                    button.disabled = true;
+
+                    // Get attachment details
+                    const messageId = button.getAttribute('onclick').match(/'([^']+)'/)[1];
+                    const filename = button.getAttribute('data-filename');
+
+                    // Show individual upload notification
+                    showNotification(`📤 Uploading: ${filename}`, 'info');
+
+                    // Upload to S3
+                    await uploadToS3Silent(messageId, filename);
+
+                    // Mark as uploaded
+                    button.classList.remove('uploading');
+                    button.classList.add('uploaded');
+                    button.textContent = 'Uploaded';
+                    button.disabled = true;
+
+                    successful++;
+                    completed++;
+                    updateProgress(completed, total);
+
+                    // Show success notification for individual file
+                    showNotification(`✅ Uploaded: ${filename}`, 'success');
+
+                } catch (error) {
+                    console.error('Upload failed for:', button, error);
+                    button.classList.remove('uploading');
+                    button.textContent = 'Failed';
+                    button.style.background = 'linear-gradient(45deg, #dc3545, #c82333)';
+                    
+                    failed++;
+                    completed++;
+                    updateProgress(completed, total);
+
+                    // Show error notification for individual file
+                    showNotification(`❌ Failed: ${filename}`, 'error');
+                }
+
+                // Small delay between uploads
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            // Show final completion notification
+            if (failed === 0) {
+                showNotification(`🎉 All ${successful} attachments uploaded successfully!`, 'success');
+            } else {
+                showNotification(`⚠️ Upload complete: ${successful} successful, ${failed} failed`, 'warning');
+            }
+
+            // Hide progress modal after a delay
+            setTimeout(() => {
+                hideUploadProgress();
+            }, 2000);
+        }
+
+        // Function to show upload progress modal
+        function showUploadProgress(completed, total) {
+            const modal = document.createElement('div');
+            modal.id = 'upload-progress-modal';
+            modal.className = 'upload-progress';
+            modal.innerHTML = `
+                <h3>📤 Auto-Uploading Attachments</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="progress-text" id="progress-text">0 / ${total} uploaded</div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        // Function to update progress
+        function updateProgress(completed, total) {
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+            
+            if (progressFill && progressText) {
+                const percentage = (completed / total) * 100;
+                progressFill.style.width = percentage + '%';
+                progressText.textContent = `${completed} / ${total} uploaded`;
+            }
+        }
+
+        // Function to hide upload progress modal
+        function hideUploadProgress() {
+            const modal = document.getElementById('upload-progress-modal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // Function to show notifications
+        function showNotification(message, type = 'info', duration = 3000) {
+            // Remove any existing notifications
+            const existingNotifications = document.querySelectorAll('.notification');
+            existingNotifications.forEach(notification => notification.remove());
+
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <span>${message}</span>
+                <span class="notification-close" onclick="this.parentElement.remove()">&times;</span>
+            `;
+
+            // Add to page
+            document.body.appendChild(notification);
+
+            // Auto-remove after duration
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, duration);
+        }
+
+        // Silent upload function (no alerts)
+        async function uploadToS3Silent(messageId, filename) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const email = urlParams.get('email');
+            const password = urlParams.get('password');
+            
+            if (!email || !password) {
+                throw new Error('Email credentials not found');
+            }
+            
+            const params = new URLSearchParams({
+                email_address: email,
+                password: password,
+                message_id: messageId,
+                filename: filename
+            });
+            
+            const response = await fetch(`/upload-to-s3?${params}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                throw new Error(result.message || 'Upload failed');
+            }
+            
+            return result;
+        }
 
         // Function for uploading to S3
         async function uploadToS3(messageId, filename) {
