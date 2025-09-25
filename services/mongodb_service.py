@@ -20,9 +20,7 @@ class MongoDBService:
             self.client = motor.motor_asyncio.AsyncIOMotorClient(self.database_url)
             self.db = self.client.recruitment
             self.expected_candidates = self.db.expected_candidate
-            print("MongoDB connection initialized successfully")
         except Exception as e:
-            print(f"Failed to initialize MongoDB connection: {e}")
             raise e
     
     async def test_connection(self) -> bool:
@@ -30,10 +28,8 @@ class MongoDBService:
         try:
             # Test the connection
             await self.client.admin.command('ping')
-            print("MongoDB connection test successful")
             return True
         except Exception as e:
-            print(f"MongoDB connection test failed: {e}")
             return False
     
     async def create_expected_candidate(self, name: str, job_posting: str, cv_file_path: str) -> Dict[str, Any]:
@@ -60,7 +56,6 @@ class MongoDBService:
             result = await self.expected_candidates.insert_one(candidate_data)
             
             if result.inserted_id:
-                print(f"Successfully created expected candidate: {name}")
                 return {
                     "success": True,
                     "message": f"Successfully saved candidate {name} to database",
@@ -76,7 +71,6 @@ class MongoDBService:
                 
         except Exception as e:
             error_msg = f"Database error: {str(e)}"
-            print(error_msg)
             return {
                 "success": False,
                 "error": error_msg,
@@ -109,7 +103,6 @@ class MongoDBService:
             
         except Exception as e:
             error_msg = f"Database error: {str(e)}"
-            print(error_msg)
             return {
                 "success": False,
                 "error": error_msg,
@@ -121,6 +114,5 @@ class MongoDBService:
         """Close MongoDB connection"""
         try:
             self.client.close()
-            print("MongoDB connection closed")
         except Exception as e:
-            print(f"Error closing MongoDB connection: {e}")
+            pass

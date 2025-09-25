@@ -31,10 +31,7 @@ class EmailService:
         
     def connect(self):
         """Connect to Gmail IMAP server"""
-        print(f"Connecting to Gmail account: {self.email_address}")
-        
         try:
-            print(f"Connecting to {self.imap_server}:{self.imap_port}")
             
             # Create SSL context with more permissive settings
             context = ssl.create_default_context()
@@ -45,13 +42,10 @@ class EmailService:
             self.mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port, ssl_context=context)
             
             # Login with credentials - this will raise an exception if authentication fails
-            print(f"Attempting login for: {self.email_address}")
             try:
                 self.mail.login(self.email_address, self.password)
-                print("Login successful!")
             except imaplib.IMAP4.error as auth_error:
                 error_msg = str(auth_error)
-                print(f"Authentication failed: {error_msg}")
                 if "Authentication failed" in error_msg or "Invalid credentials" in error_msg or "LOGIN failed" in error_msg:
                     raise Exception("Invalid Gmail credentials. Please check your email and password.")
                 else:
@@ -59,19 +53,16 @@ class EmailService:
             
             # Select INBOX
             self.mail.select("INBOX")
-            print("INBOX selected successfully")
             
             # Test the connection by trying to get mailbox status
             status, messages = self.mail.status("INBOX", "(MESSAGES)")
             if status != "OK":
                 raise Exception("Failed to access mailbox")
             
-            print("Mailbox access confirmed")
             return True
                     
         except imaplib.IMAP4.error as e:
             error_msg = str(e)
-            print(f"IMAP error: {error_msg}")
             
             if "Authentication failed" in error_msg or "Invalid credentials" in error_msg or "LOGIN failed" in error_msg:
                 raise Exception("Invalid Gmail credentials. Please check your email and password.")
@@ -84,7 +75,6 @@ class EmailService:
                 
         except Exception as e:
             error_msg = str(e)
-            print(f"Connection failed: {error_msg}")
             
             if "Authentication failed" in error_msg or "Invalid credentials" in error_msg or "LOGIN failed" in error_msg:
                 raise Exception("Invalid Gmail credentials. Please check your email and password.")
@@ -135,7 +125,6 @@ class EmailService:
             
             # If no emails found, still return success but with empty list
             if not email_ids:
-                print("No emails found in inbox")
                 return []
             
             email_ids = email_ids[-limit:] if len(email_ids) > limit else email_ids
@@ -157,19 +146,15 @@ class EmailService:
                     emails.append(email_data)
                     
                 except Exception as e:
-                    print(f"Error processing email {email_id}: {e}")
                     continue
             
             # Verify we actually got some emails
             if not emails:
-                print("No emails could be retrieved")
                 return []
             
-            print(f"Successfully retrieved {len(emails)} emails")
             return emails
             
         except Exception as e:
-            print(f"Error fetching emails: {e}")
             raise e
         finally:
             self.disconnect()
@@ -190,7 +175,6 @@ class EmailService:
             
             # If no unread emails found, return empty list
             if not email_ids:
-                print("No unread emails found in inbox")
                 return []
             
             email_ids = email_ids[-limit:] if len(email_ids) > limit else email_ids
@@ -212,19 +196,15 @@ class EmailService:
                     emails.append(email_data)
                     
                 except Exception as e:
-                    print(f"Error processing email {email_id}: {e}")
                     continue
             
             # Verify we actually got some emails
             if not emails:
-                print("No unread emails could be retrieved")
                 return []
             
-            print(f"Successfully retrieved {len(emails)} unread emails")
             return emails
             
         except Exception as e:
-            print(f"Error fetching unread emails: {e}")
             raise e
         finally:
             self.disconnect()
@@ -248,7 +228,6 @@ class EmailService:
             return True
             
         except Exception as e:
-            print(f"Connection test failed: {e}")
             return False
         finally:
             self.disconnect()

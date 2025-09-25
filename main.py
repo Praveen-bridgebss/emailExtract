@@ -52,7 +52,6 @@ async def config_page(request: Request):
 async def test_connection(credentials: EmailCredentials):
     """Test email connection with provided credentials"""
     try:
-        print(f"Testing connection with: {credentials.email}")
         email_service = EmailService(credentials.email, credentials.password)
         
         # Test connection with improved validation
@@ -72,7 +71,6 @@ async def test_connection(credentials: EmailCredentials):
             "message": f"Successfully connected! Found {len(emails)} emails."
         }
     except Exception as e:
-        print(f"Connection test failed: {e}")
         return {
             "success": False,
             "error": str(e),
@@ -87,12 +85,10 @@ async def get_emails(request: Request):
         email = request.query_params.get("email", EMAIL_ADDRESS)
         password = request.query_params.get("password", EMAIL_PASSWORD)
         
-        print(f"Attempting to connect to email: {email}")
         email_service = EmailService(email, password)
         
         # Fetch only unread emails
         emails = email_service.get_unread_emails(limit=100)
-        print(f"Retrieved {len(emails)} unread emails")
         
         # Categorize emails by job titles
         categorized_emails = email_service.categorize_emails(emails)
@@ -104,7 +100,6 @@ async def get_emails(request: Request):
             "error": None
         })
     except Exception as e:
-        print(f"Error retrieving emails: {e}")
         return templates.TemplateResponse("emails.html", {
             "request": request, 
             "categorized_emails": {},
@@ -132,8 +127,6 @@ async def download_attachment(
 ):
     """Download a specific attachment from an email"""
     try:
-        print(f"Download request for: {filename} from {email_address}")
-        
         # Create email service and connect
         email_service = EmailService(email_address, password)
         
@@ -164,40 +157,25 @@ async def download_attachment(
             # Get attachments
             attachments = email_service.get_attachments(email_message)
             
-            print(f"Found {len(attachments)} attachments in email")
-            
             # Find the requested attachment
             target_attachment = None
-            print(f"Looking for attachment: '{filename}'")
-            print(f"Total attachments found: {len(attachments)}")
             
-            for i, attachment in enumerate(attachments):
-                print(f"Attachment {i+1}: '{attachment['filename']}'")
-                print(f"  Size: {attachment.get('size', 'Unknown')} bytes")
-                print(f"  Content Type: {attachment.get('content_type', 'Unknown')}")
-                
+            for attachment in attachments:
                 # Try exact match first
                 if attachment["filename"] == filename:
                     target_attachment = attachment
-                    print(f"✅ Exact match found!")
                     break
                 # Try URL decoded match
                 elif attachment["filename"] == filename.replace('%20', ' '):
                     target_attachment = attachment
-                    print(f"✅ URL decoded match found!")
                     break
                 # Try case insensitive match
                 elif attachment["filename"].lower() == filename.lower():
                     target_attachment = attachment
-                    print(f"✅ Case insensitive match found!")
                     break
             
             if not target_attachment:
-                print(f"❌ Attachment not found: '{filename}'")
                 available_filenames = [att["filename"] for att in attachments]
-                print(f"Available attachments:")
-                for i, name in enumerate(available_filenames):
-                    print(f"  {i+1}. '{name}'")
                 
                 return JSONResponse(
                     status_code=404,
@@ -212,8 +190,6 @@ async def download_attachment(
                         }
                     }
                 )
-            
-            print(f"Found target attachment: {target_attachment['filename']}, size: {target_attachment['size']} bytes")
             
             # Return the attachment as a download
             headers = {
@@ -235,7 +211,6 @@ async def download_attachment(
         # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
-        print(f"Error downloading attachment: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to download attachment: {str(e)}")
 
 @app.post("/upload-to-s3")
@@ -249,8 +224,6 @@ async def upload_to_s3(
 ):
     """Upload attachment to S3 bucket"""
     try:
-        print(f"S3 upload request for: {filename} from {email_address}")
-        
         # Initialize S3 service
         s3_service = S3Service(AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION)
         
@@ -323,8 +296,6 @@ async def upload_to_s3(
             # Get attachments
             attachments = email_service.get_attachments(email_message)
             
-            print(f"Found {len(attachments)} attachments in email")
-            
             # Find the requested attachment
             target_attachment = None
             for attachment in attachments:
@@ -333,9 +304,7 @@ async def upload_to_s3(
                     break
             
             if not target_attachment:
-                print(f"Attachment not found: {filename}")
                 available_filenames = [att["filename"] for att in attachments]
-                print(f"Available attachments: {available_filenames}")
                 return JSONResponse(
                     status_code=404,
                     content={
@@ -344,8 +313,6 @@ async def upload_to_s3(
                         "message": f"Attachment '{filename}' not found in the email"
                     }
                 )
-            
-            print(f"Found target attachment: {target_attachment['filename']}, size: {target_attachment['size']} bytes")
             
             # Upload to S3
             upload_result = s3_service.upload_attachment(
@@ -451,7 +418,6 @@ async def upload_to_s3(
             email_service.disconnect()
             
     except Exception as e:
-        print(f"Error uploading to S3: {e}")
         return JSONResponse(
             status_code=500,
             content={

@@ -464,7 +464,6 @@
 
         // Function to start the countdown
         function startCountdown() {
-            console.log('Starting 30-second countdown...');
             isUploading = false;
             refreshCountdown = 30;
             
@@ -494,7 +493,6 @@
         window.addEventListener('load', function() {
             // Wait 2 seconds for page to fully load, then start auto-upload
             setTimeout(() => {
-                console.log('Page loaded, checking for attachments to upload...');
                 autoUploadAllAttachments();
             }, 2000);
         });
@@ -502,8 +500,6 @@
 
         // Function to manually trigger refresh and upload
         async function refreshAndUpload() {
-            console.log('Manual refresh triggered');
-            
             // Clear the automatic refresh interval
             clearInterval(refreshInterval);
             
@@ -517,7 +513,6 @@
 
         // Function to automatically upload all attachments
         async function autoUploadAllAttachments() {
-            console.log('autoUploadAllAttachments function called');
             isUploading = true;
             
             // Get all upload buttons, but exclude those in uncategorized sections
@@ -545,12 +540,8 @@
                 uploadButtons.push(button);
             }
             
-            console.log(`Found ${uploadButtons.length} attachments to upload (${uncategorizedCount} uncategorized skipped)`);
-            
-            
             if (uploadButtons.length === 0) {
                 showNotification('ℹ️ No new attachments to upload', 'info');
-                console.log('No attachments to upload');
                 // Start countdown immediately if no uploads needed
                 startCountdown();
                 return;
@@ -558,7 +549,6 @@
 
             // Show starting notification
             showNotification(`📤 Auto-uploading ${uploadButtons.length} attachments...`, 'info');
-            console.log(`Starting upload of ${uploadButtons.length} attachments`);
 
             // Show progress modal
             showUploadProgress(0, uploadButtons.length);
@@ -597,7 +587,6 @@
                     const filename = matches[2];
                     const jobCategory = matches[3];
 
-                    console.log(`Auto-uploading: ${filename} for category: ${jobCategory}`);
                     // Show individual upload notification
                     showNotification(`📤 Auto-uploading: ${filename}`, 'info');
 
@@ -614,7 +603,6 @@
                     completed++;
                     updateProgress(completed, total);
 
-                    console.log(`Successfully auto-uploaded: ${filename}`);
                     // Show success notification for individual file
                     showNotification(`✅ Auto-uploaded: ${filename}`, 'success');
                     
@@ -626,7 +614,6 @@
                     }
 
                 } catch (error) {
-                    console.error('Auto-upload failed for:', button, error);
                     button.classList.remove('uploading');
                     button.textContent = 'Failed';
                     button.style.background = 'linear-gradient(45deg, #dc3545, #c82333)';
@@ -643,7 +630,6 @@
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
 
-            console.log(`Auto-upload complete: ${successful} successful, ${failed} failed`);
             // Show final completion notification
             if (failed === 0) {
                 showNotification(`🎉 Auto-uploaded all ${successful} attachments successfully!`, 'success');
@@ -665,7 +651,6 @@
             }, 2000);
 
             // Start countdown only after all uploads are complete
-            console.log('All uploads complete, starting 30-second countdown...');
             setTimeout(() => {
                 startCountdown();
             }, 3000); // Wait 3 seconds after uploads complete
@@ -769,8 +754,6 @@
         // Function for uploading to S3
         async function uploadToS3(messageId, filename, jobCategory = 'Unknown') {
             try {
-                console.log('Uploading to S3:', { messageId, filename });
-                
                 // Get current URL parameters for email and password
                 const urlParams = new URLSearchParams(window.location.search);
                 const email = urlParams.get('email');
@@ -789,7 +772,6 @@
                 
                 // Get filename from button data attribute if available
                 const actualFilename = button.getAttribute('data-filename') || filename;
-                console.log('Actual filename:', actualFilename);
                 
                 // Call S3 upload endpoint
                 const params = new URLSearchParams({
@@ -800,8 +782,6 @@
                     job_category: jobCategory
                 });
                 
-                console.log('S3 upload params:', params.toString());
-                
                 const response = await fetch(`/upload-to-s3?${params}`, {
                     method: 'POST',
                     headers: {
@@ -809,10 +789,7 @@
                     }
                 });
                 
-                console.log('S3 upload response status:', response.status);
-                
                 const result = await response.json();
-                console.log('S3 upload result:', result);
                 
                 if (result.success) {
                     let successMessage = `✅ Successfully uploaded ${actualFilename} to S3!\n\nS3 URL: ${result.s3_url}`;
@@ -835,7 +812,6 @@
                 }
                 
             } catch (error) {
-                console.error('Upload error:', error);
                 alert(`❌ Upload failed: ${error.message}`);
             } finally {
                 // Restore button state
