@@ -383,11 +383,21 @@ async def upload_to_s3(
                 # Use the job category from the request parameter
                 job_posting = job_category
                 
+                # Extract relative path from S3 URL (remove base URL)
+                s3_url = upload_result["s3_url"]
+                # Remove the base URL part: https://bridge-cv-dev.s3.us-east-2.amazonaws.com
+                base_url = "https://bridge-cv-dev.s3.us-east-2.amazonaws.com"
+                if s3_url.startswith(base_url):
+                    relative_path = s3_url.replace(base_url, "")
+                else:
+                    # Fallback: try to extract path from any S3 URL format
+                    relative_path = "/" + upload_result["key"]
+                
                 # Save to MongoDB
                 db_result = await mongodb_service.create_expected_candidate(
                     name=target_attachment["filename"],
                     job_posting=job_posting,
-                    cv_file_path=upload_result["s3_url"]
+                    cv_file_path=relative_path
                 )
                 
                 # Close MongoDB connection
@@ -407,7 +417,7 @@ async def upload_to_s3(
                         "database": {
                             "candidate_id": db_result["candidate_id"],
                             "job_posting": job_posting,
-                            "cv_file_path": upload_result["s3_url"]
+                            "cv_file_path": relative_path
                         }
                     }
                     return JSONResponse(
@@ -427,7 +437,8 @@ async def upload_to_s3(
                             "filename": upload_result["filename"],
                             "original_filename": upload_result["original_filename"],
                             "size": upload_result["size"],
-                            "database_error": db_result["error"]
+                            "database_error": db_result["error"],
+                            "cv_file_path": relative_path
                         }
                     )
             else:
