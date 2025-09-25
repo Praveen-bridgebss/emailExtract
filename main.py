@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, Response, JSONResponse
 from fastapi.templating import Jinja2Templates
 from services.email_service import EmailService
 from services.s3_service import S3Service
+from services.mongodb_service import MongoDBService
 from pydantic import BaseModel
 import uvicorn
 import base64
@@ -29,6 +30,9 @@ AWS_REGION = os.getenv("AWS_REGION", "us-east-2")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 S3_CV_FOLDER = os.getenv("S3_CV_FOLDER", "emailCvs")
 
+# MongoDB connection - Load from environment variables
+DATABASE_URL = os.getenv("DATABASE_URL")
+
 # Pydantic model for request body
 class EmailCredentials(BaseModel):
     email: str
@@ -42,6 +46,7 @@ async def read_root(request: Request):
 async def config_page(request: Request):
     """Configuration page for email settings"""
     return templates.TemplateResponse("config.html", {"request": request})
+
 
 @app.post("/test-connection")
 async def test_connection(credentials: EmailCredentials):
@@ -239,7 +244,8 @@ async def upload_to_s3(
     email_address: str = Query(...),
     password: str = Query(...),
     message_id: str = Query(...),
-    filename: str = Query(...)
+    filename: str = Query(...),
+    job_category: str = Query("Unknown", description="Job category for the candidate")
 ):
     """Upload attachment to S3 bucket"""
     try:
@@ -350,10 +356,80 @@ async def upload_to_s3(
             )
             
             if upload_result["success"]:
-                return JSONResponse(
-                    status_code=200,
-                    content=upload_result
+                # Initialize MongoDB service
+                try:
+                    mongodb_service = MongoDBService()
+                except Exception as e:
+                    return JSONResponse(
+                        status_code=500,
+                        content={
+                            "success": False,
+                            "error": "MongoDB configuration error",
+                            "message": f"S3 upload successful but database configuration failed: {str(e)}"
+                        }
+                    )
+                
+                # Test MongoDB connection
+                if not await mongodb_service.test_connection():
+                    return JSONResponse(
+                        status_code=500,
+                        content={
+                            "success": False,
+                            "error": "MongoDB connection failed",
+                            "message": "S3 upload successful but failed to connect to database"
+                        }
+                    )
+                
+                # Use the job category from the request parameter
+                job_posting = job_category
+                
+                # Save to MongoDB
+                db_result = await mongodb_service.create_expected_candidate(
+                    name=target_attachment["filename"],
+                    job_posting=job_posting,
+                    cv_file_path=upload_result["s3_url"]
                 )
+                
+                # Close MongoDB connection
+                await mongodb_service.close_connection()
+                
+                if db_result["success"]:
+                    # Combine S3 and database results
+                    combined_result = {
+                        "success": True,
+                        "message": f"Successfully uploaded {target_attachment['filename']} to S3 and saved to database",
+                        "s3_url": upload_result["s3_url"],
+                        "bucket": upload_result["bucket"],
+                        "key": upload_result["key"],
+                        "filename": upload_result["filename"],
+                        "original_filename": upload_result["original_filename"],
+                        "size": upload_result["size"],
+                        "database": {
+                            "candidate_id": db_result["candidate_id"],
+                            "job_posting": job_posting,
+                            "cv_file_path": upload_result["s3_url"]
+                        }
+                    }
+                    return JSONResponse(
+                        status_code=200,
+                        content=combined_result
+                    )
+                else:
+                    # S3 upload successful but database failed
+                    return JSONResponse(
+                        status_code=207,  # Multi-status
+                        content={
+                            "success": True,
+                            "message": f"S3 upload successful but database save failed: {db_result['message']}",
+                            "s3_url": upload_result["s3_url"],
+                            "bucket": upload_result["bucket"],
+                            "key": upload_result["key"],
+                            "filename": upload_result["filename"],
+                            "original_filename": upload_result["original_filename"],
+                            "size": upload_result["size"],
+                            "database_error": db_result["error"]
+                        }
+                    )
             else:
                 return JSONResponse(
                     status_code=500,
@@ -373,6 +449,7 @@ async def upload_to_s3(
                 "message": "An unexpected error occurred during S3 upload"
             }
         )
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

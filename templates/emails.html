@@ -251,6 +251,16 @@
             transform: none;
             box-shadow: 0 1px 3px rgba(40, 167, 69, 0.3);
         }
+        .skipped-btn {
+            background: linear-gradient(45deg, #6c757d, #495057) !important;
+            cursor: not-allowed !important;
+            opacity: 0.8;
+        }
+        .skipped-btn:hover {
+            background: linear-gradient(45deg, #6c757d, #495057) !important;
+            transform: none !important;
+            box-shadow: none !important;
+        }
         .upload-progress {
             position: fixed;
             top: 50%;
@@ -360,6 +370,7 @@
                             <span class="email-count">({{ emails|length }} emails)</span>
                         </h2>
                         
+                        
                         <table class="email-table">
                             <thead>
                                 <tr>
@@ -389,12 +400,22 @@
                                                             {{ attachment.icon }} {{ attachment.filename }}
                                                             <span class="attachment-size">({{ attachment.size_display }})</span>
                                                         </a>
+                                                        {% if category == "Uncategorized" %}
+                                                        <button class="tos3-btn skipped-btn" 
+                                                                title="Uncategorized email - S3 upload disabled"
+                                                                disabled
+                                                                style="background: linear-gradient(45deg, #6c757d, #495057); cursor: not-allowed;"
+                                                                data-filename="{{ attachment.filename }}">
+                                                            Skipped
+                                                        </button>
+                                                        {% else %}
                                                         <button class="tos3-btn" 
                                                                 title="Upload {{ attachment.filename }} to S3"
-                                                                onclick="uploadToS3('{{ email.message_id }}', '{{ attachment.filename }}')"
+                                                                onclick="uploadToS3('{{ email.message_id }}', '{{ attachment.filename }}', '{{ category }}')"
                                                                 data-filename="{{ attachment.filename }}">
                                                             toS3
                                                         </button>
+                                                        {% endif %}
                                                     </div>
                                                 {% endfor %}
                                             </div>
@@ -499,8 +520,33 @@
             console.log('autoUploadAllAttachments function called');
             isUploading = true;
             
-            const uploadButtons = document.querySelectorAll('.tos3-btn:not(.uploaded)');
-            console.log(`Found ${uploadButtons.length} attachments to upload`);
+            // Get all upload buttons, but exclude those in uncategorized sections
+            const allUploadButtons = document.querySelectorAll('.tos3-btn:not(.uploaded)');
+            const uploadButtons = [];
+            let uncategorizedCount = 0;
+            
+            // Filter out buttons from uncategorized sections
+            for (let button of allUploadButtons) {
+                // Skip buttons that are already marked as skipped
+                if (button.classList.contains('skipped-btn')) {
+                    uncategorizedCount++;
+                    continue;
+                }
+                
+                const categorySection = button.closest('.category-section');
+                if (categorySection) {
+                    const categoryTitle = categorySection.querySelector('.category-title');
+                    if (categoryTitle && categoryTitle.textContent.includes('Uncategorized')) {
+                        // Skip uncategorized emails - don't upload to S3
+                        uncategorizedCount++;
+                        continue;
+                    }
+                }
+                uploadButtons.push(button);
+            }
+            
+            console.log(`Found ${uploadButtons.length} attachments to upload (${uncategorizedCount} uncategorized skipped)`);
+            
             
             if (uploadButtons.length === 0) {
                 showNotification('ℹ️ No new attachments to upload', 'info');
@@ -545,15 +591,18 @@
                     button.disabled = true;
 
                     // Get attachment details
-                    const messageId = button.getAttribute('onclick').match(/'([^']+)'/)[1];
-                    const filename = button.getAttribute('data-filename');
+                    const onclickAttr = button.getAttribute('onclick');
+                    const matches = onclickAttr.match(/uploadToS3\('([^']+)',\s*'([^']+)',\s*'([^']+)'\)/);
+                    const messageId = matches[1];
+                    const filename = matches[2];
+                    const jobCategory = matches[3];
 
-                    console.log(`Auto-uploading: ${filename}`);
+                    console.log(`Auto-uploading: ${filename} for category: ${jobCategory}`);
                     // Show individual upload notification
                     showNotification(`📤 Auto-uploading: ${filename}`, 'info');
 
                     // Upload to S3
-                    await uploadToS3Silent(messageId, filename);
+                    const uploadResult = await uploadToS3Silent(messageId, filename, jobCategory);
 
                     // Mark as uploaded
                     button.classList.remove('uploading');
@@ -568,6 +617,13 @@
                     console.log(`Successfully auto-uploaded: ${filename}`);
                     // Show success notification for individual file
                     showNotification(`✅ Auto-uploaded: ${filename}`, 'success');
+                    
+                    // Show database notification if available
+                    if (uploadResult && uploadResult.database) {
+                        showNotification(`📊 Database: Saved candidate ${filename} as ID ${uploadResult.database.candidate_id}`, 'success', 4000);
+                    } else if (uploadResult && uploadResult.database_error) {
+                        showNotification(`⚠️ Database: Failed to save ${filename} - ${uploadResult.database_error}`, 'warning', 4000);
+                    }
 
                 } catch (error) {
                     console.error('Auto-upload failed for:', button, error);
@@ -591,8 +647,16 @@
             // Show final completion notification
             if (failed === 0) {
                 showNotification(`🎉 Auto-uploaded all ${successful} attachments successfully!`, 'success');
+                // Show database summary
+                setTimeout(() => {
+                    showNotification(`📊 Database: All ${successful} candidates saved to MongoDB`, 'success', 5000);
+                }, 1000);
             } else {
                 showNotification(`⚠️ Auto-upload complete: ${successful} successful, ${failed} failed`, 'warning');
+                // Show database summary
+                setTimeout(() => {
+                    showNotification(`📊 Database: ${successful} candidates saved to MongoDB`, 'success', 5000);
+                }, 1000);
             }
 
             // Hide progress modal after a delay
@@ -669,7 +733,7 @@
         }
 
         // Silent upload function (no alerts)
-        async function uploadToS3Silent(messageId, filename) {
+        async function uploadToS3Silent(messageId, filename, jobCategory = 'Unknown') {
             const urlParams = new URLSearchParams(window.location.search);
             const email = urlParams.get('email');
             const password = urlParams.get('password');
@@ -682,7 +746,8 @@
                 email_address: email,
                 password: password,
                 message_id: messageId,
-                filename: filename
+                filename: filename,
+                job_category: jobCategory
             });
             
             const response = await fetch(`/upload-to-s3?${params}`, {
@@ -702,7 +767,7 @@
         }
 
         // Function for uploading to S3
-        async function uploadToS3(messageId, filename) {
+        async function uploadToS3(messageId, filename, jobCategory = 'Unknown') {
             try {
                 console.log('Uploading to S3:', { messageId, filename });
                 
@@ -731,7 +796,8 @@
                     email_address: email,
                     password: password,
                     message_id: messageId,
-                    filename: actualFilename
+                    filename: actualFilename,
+                    job_category: jobCategory
                 });
                 
                 console.log('S3 upload params:', params.toString());
@@ -749,7 +815,17 @@
                 console.log('S3 upload result:', result);
                 
                 if (result.success) {
-                    alert(`✅ Successfully uploaded ${actualFilename} to S3!\n\nS3 URL: ${result.s3_url}`);
+                    let successMessage = `✅ Successfully uploaded ${actualFilename} to S3!\n\nS3 URL: ${result.s3_url}`;
+                    if (result.database) {
+                        successMessage += `\n\n📊 Database: Saved as candidate ID ${result.database.candidate_id}`;
+                        successMessage += `\n📋 Job Category: ${result.database.job_posting}`;
+                        // Also show a notification for database success
+                        showNotification(`📊 Database: Saved candidate ${actualFilename} as ID ${result.database.candidate_id}`, 'success', 4000);
+                    } else if (result.database_error) {
+                        successMessage += `\n\n⚠️ Database: Failed to save - ${result.database_error}`;
+                        showNotification(`⚠️ Database: Failed to save ${actualFilename} - ${result.database_error}`, 'warning', 4000);
+                    }
+                    alert(successMessage);
                 } else {
                     let errorMessage = `❌ Upload failed: ${result.message}`;
                     if (result.debug_info) {
